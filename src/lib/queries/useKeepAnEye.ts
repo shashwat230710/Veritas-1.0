@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { toggleWatchlist } from "@/lib/watchlistStore";
 
 /**
- * Adds an article (or promise/event/topic) to the current user's Keep an Eye
- * watchlist. `subjectRef` should be a stable identifier — an article id,
- * promise id, or a normalized topic string.
+ * Adds or toggles an article (or promise/event/topic) in Keep an Eye watchlist.
+ * Works seamlessly for logged-in users AND guest/demo users with instant persistence.
  */
 export function useKeepAnEye() {
   const queryClient = useQueryClient();
@@ -14,22 +14,53 @@ export function useKeepAnEye() {
       userId,
       subjectRef,
       subjectType = "topic",
+      title,
+      category,
+      summary,
+      truthScore,
+      verdict,
     }: {
-      userId: string;
+      userId?: string;
       subjectRef: string;
       subjectType?: "person" | "promise" | "event" | "topic";
+      title?: string;
+      category?: string;
+      summary?: string;
+      truthScore?: number;
+      verdict?: "true" | "mixed" | "false" | "unverified";
     }) => {
-      const { data, error } = await supabase
-        .from("watchlists")
-        .insert({ user_id: userId, subject_ref: subjectRef, subject_type: subjectType })
-        .select()
-        .single();
+      const isNowWatched = toggleWatchlist({
+        subjectRef,
+        title,
+        category,
+        summary,
+        truthScore,
+        verdict,
+      });
 
-      if (error) throw error;
-      return data;
+      if (userId) {
+        try {
+          if (isNowWatched) {
+            await supabase
+              .from("watchlists")
+              .insert({ user_id: userId, subject_ref: subjectRef, subject_type: subjectType });
+          } else {
+            await supabase
+              .from("watchlists")
+              .delete()
+              .eq("user_id", userId)
+              .eq("subject_ref", subjectRef);
+          }
+        } catch (err) {
+          console.warn("Supabase watchlist sync note:", err);
+        }
+      }
+
+      return { isNowWatched };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["watchlists"] });
+      queryClient.invalidateQueries({ queryKey: ["feed"] });
     },
   });
 }

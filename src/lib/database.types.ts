@@ -190,4 +190,5 @@ export interface FeedItem {
   confidence: Confidence | null;
   verdict: Verdict | null;
   isWatched: boolean;
+  imageUrl?: string | null;
 }

@@ -40,6 +40,19 @@ function isUrl(input: string): boolean {
   }
 }
 
+function detectUrlType(urlStr: string): "youtube" | "video" | "social" | "article" | "text" {
+  try {
+    const u = new URL(urlStr);
+    const host = u.hostname.toLowerCase();
+    if (host.includes("youtube.com") || host.includes("youtu.be")) return "youtube";
+    if (host.includes("vimeo.com") || host.includes("tiktok.com") || host.includes("dailymotion.com")) return "video";
+    if (host.includes("twitter.com") || host.includes("x.com") || host.includes("facebook.com") || host.includes("instagram.com") || host.includes("reddit.com")) return "social";
+    return "article";
+  } catch {
+    return "text";
+  }
+}
+
 function htmlToText(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -55,36 +68,72 @@ function htmlToText(html: string): string {
     .trim();
 }
 
-async function resolveContent(input: string): Promise<{ content: string; sourceUrl: string | null }> {
+async function resolveContent(input: string): Promise<{ content: string; sourceUrl: string | null; urlType: string }> {
   const trimmed = input.trim();
-  if (!isUrl(trimmed)) return { content: trimmed, sourceUrl: null };
+  if (!isUrl(trimmed)) {
+    return { content: trimmed, sourceUrl: null, urlType: "text" };
+  }
 
-  const res = await fetch(trimmed, {
-    headers: { "user-agent": "Mozilla/5.0 (compatible; VeritasTruthAnalyzer/1.0)" },
-  });
-  if (!res.ok) {
-    throw new Error(`Couldn't fetch that URL (HTTP ${res.status}). Some sites block automated requests.`);
+  const urlType = detectUrlType(trimmed);
+
+  // Special URL handling
+  if (urlType === "youtube" || urlType === "video") {
+    // For video URLs, pass structured instructions so Gemini grounds search on the video title/transcript
+    return {
+      content: `[VIDEO URL ANALYSIS REQUEST]\nTarget Video URL: ${trimmed}\nVideo Platform: ${urlType.toUpperCase()}\n\nPlease verify claims made in or associated with this video using Google Search grounding.`,
+      sourceUrl: trimmed,
+      urlType,
+    };
   }
-  const html = await res.text();
-  const text = htmlToText(html).slice(0, 8000);
-  if (text.length < 100) {
-    throw new Error("Fetched the URL but couldn't extract readable text — the page may require JavaScript.");
+
+  if (urlType === "social") {
+    return {
+      content: `[SOCIAL MEDIA POST ANALYSIS REQUEST]\nTarget Social Post URL: ${trimmed}\n\nPlease verify the claim or viral post at this URL using live web search and primary source evidence.`,
+      sourceUrl: trimmed,
+      urlType,
+    };
   }
-  return { content: text, sourceUrl: trimmed };
+
+  // General Article / Web Page URL
+  try {
+    const res = await fetch(trimmed, {
+      headers: { 
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+      },
+    });
+
+    if (res.ok) {
+      const html = await res.text();
+      const text = htmlToText(html).slice(0, 10000);
+      if (text.length >= 100) {
+        return { content: text, sourceUrl: trimmed, urlType: "article" };
+      }
+    }
+  } catch (err) {
+    console.warn("Direct HTML fetch failed, falling back to direct URL search grounding:", err);
+  }
+
+  // Fallback if HTTP fetch is blocked by CORS/Cloudflare/anti-bot protection
+  return {
+    content: `[ARTICLE / WEB URL ANALYSIS REQUEST]\nTarget URL: ${trimmed}\n\nPlease use Google Search grounding to inspect the content and verify the claims from this URL.`,
+    sourceUrl: trimmed,
+    urlType: "article",
+  };
 }
 
 interface GeminiPart {
   text?: string;
 }
 
-async function callGemini(content: string, sourceUrl: string | null): Promise<FactCheckResult> {
+async function callGemini(content: string, sourceUrl: string | null, urlType: string): Promise<FactCheckResult> {
   const systemPrompt = `You are the Fact Checker agent inside Veritas, a truth-verification platform.
 You have Google Search grounding enabled — use it to check the claim against real, current sources
-before answering. Don't rely solely on prior knowledge, especially for anything recent or fast-moving.
-${sourceUrl ? `\nThe text below was fetched from: ${sourceUrl}` : ""}
+before answering. Don't rely solely on prior knowledge, especially for anything recent, viral, or fast-moving.
+${sourceUrl ? `\nInput Source URL (${urlType.toUpperCase()}): ${sourceUrl}` : ""}
 
-Do your research, then reply with ONLY a single JSON object — no prose before or after it, no
-markdown fences — matching this shape:
+Do your research using Google Search grounding, then reply with ONLY a single JSON object — no prose before or after it, no
+markdown fences — matching this exact shape:
 {
   "claim": string,
   "truthScore": number,
@@ -95,7 +144,7 @@ markdown fences — matching this shape:
   "contradicting": [{"snippet": string, "url": string}]
 }
 Never state false certainty. If evidence is thin or search turns up nothing conclusive, say so and
-lower confidence rather than the score. Prefer official/primary sources over aggregators.`;
+lower confidence rather than guessing. Prefer official/primary sources over unverified aggregators.`;
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
@@ -162,8 +211,8 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Missing `input`" }), { status: 400 });
     }
 
-    const { content, sourceUrl } = await resolveContent(input);
-    const result = await callGemini(content, sourceUrl);
+    const { content, sourceUrl, urlType } = await resolveContent(input);
+    const result = await callGemini(content, sourceUrl, urlType);
 
     const { data: claim, error: claimErr } = await supabase
       .from("claims")

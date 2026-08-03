@@ -3,15 +3,20 @@
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 
-function buildSystemPrompt(memeMode: boolean): string {
-  const base = `You are the Veritas Assistant — a news-explainer, not a search engine.
-You have a web_search tool — use it whenever the question involves current events, recent
-developments, or anything you're not fully certain is still accurate. Don't rely solely on
-prior knowledge for anything time-sensitive.
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
-Explain clearly, cite sources by name when you reference specific facts, and never state
-contested claims with false certainty. Keep answers concise by default; offer to go deeper
-("Expert mode") if asked.`;
+function buildSystemPrompt(memeMode: boolean): string {
+  const base = `You are the Veritas Global News Assistant — a multi-source news evaluator and global search engine.
+You analyze, fact-check, and re-evaluate any type of news claim, headline, rumor, or current event from anywhere in the world.
+When answering:
+1. Re-evaluate the accuracy, context, and ground truth of the news claim.
+2. Provide a clear truth verdict (True, Mixed, False, or Needs Verification) with estimated truth score.
+3. Cite reliable news sources, official wire reports, or peer-reviewed documentation.
+4. Separate verified facts from opinion or viral hype.
+5. If the query is complex, offer deeper background breakdown.`;
 
   if (!memeMode) return base;
 
@@ -23,10 +28,24 @@ sake of a joke. Accuracy always wins over the bit.`;
 }
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   try {
     const { messages, memeMode } = await req.json();
     if (!Array.isArray(messages) || messages.length === 0) {
-      return new Response(JSON.stringify({ error: "Missing `messages`" }), { status: 400 });
+      return new Response(JSON.stringify({ error: "Missing `messages`" }), {
+        status: 400,
+        headers: { ...corsHeaders, "content-type": "application/json" },
+      });
+    }
+
+    if (!ANTHROPIC_API_KEY) {
+      return new Response(
+        JSON.stringify({ error: "ANTHROPIC_API_KEY not configured on edge server" }),
+        { status: 500, headers: { ...corsHeaders, "content-type": "application/json" } }
+      );
     }
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -38,7 +57,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 1200,
+        max_tokens: 1400,
         system: buildSystemPrompt(Boolean(memeMode)),
         messages,
         tools: [{ type: "web_search_20250305", name: "web_search" }],
@@ -46,25 +65,31 @@ Deno.serve(async (req) => {
     });
 
     if (!response.ok) {
-      throw new Error(`Claude API error: ${response.status} ${await response.text()}`);
+      const errText = await response.text();
+      throw new Error(`Claude API error: ${response.status} ${errText}`);
     }
 
     const data = await response.json();
-    // Join every text block (not just the last) — with tool use, Claude
-    // may interleave short narration ("checking the latest on this...")
-    // between searches, which reads fine as one continuous reply, unlike
-    // the Truth Analyzer's strict-JSON-only case.
     const reply = (data.content ?? [])
       .filter((b: { type: string }) => b.type === "text")
       .map((b: { text: string }) => b.text)
       .join("\n\n")
       .trim();
 
-    return new Response(JSON.stringify({ reply: reply || "I wasn't able to put together an answer for that — try rephrasing?" }), {
-      headers: { "content-type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        reply: reply || "I wasn't able to put together an answer for that — try rephrasing?",
+      }),
+      {
+        headers: { ...corsHeaders, "content-type": "application/json" },
+      }
+    );
   } catch (err) {
-    console.error(err);
-    return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
+    console.error("Chat edge function error:", err);
+    return new Response(
+      JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
+      { status: 500, headers: { ...corsHeaders, "content-type": "application/json" } }
+    );
   }
 });
+
