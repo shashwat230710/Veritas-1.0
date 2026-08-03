@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   Send,
@@ -10,22 +10,19 @@ import {
   CheckCircle2,
   XCircle,
   Trash2,
-  Copy,
-  ExternalLink,
   Bot,
-  User,
   Zap,
   TrendingUp,
   HelpCircle,
   X,
   Minimize2,
-  MessageSquare,
+  Flame,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { useSession } from "@/lib/useSession";
 import { VerdictChip } from "@/components/feed/VerdictChip";
 import { TruthMeter } from "@/components/feed/TruthMeter";
 import { evaluateNewsQuery, type EvaluationResult } from "@/lib/newsAssistantEngine";
+import { useMemeMode } from "@/lib/useMemeMode";
 
 interface ChatMessage {
   id: string;
@@ -35,7 +32,7 @@ interface ChatMessage {
   timestamp: string;
 }
 
-const PRESET_TOPICS = [
+const STANDARD_TOPICS = [
   {
     icon: Zap,
     label: "Quantum Encryption",
@@ -58,20 +55,28 @@ const PRESET_TOPICS = [
   },
 ];
 
-function useMemeMode(userId: string | undefined) {
-  return useQuery({
-    queryKey: ["profile-meme-mode", userId],
-    enabled: !!userId,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("meme_mode")
-        .eq("id", userId!)
-        .single();
-      return data?.meme_mode ?? false;
-    },
-  });
-}
+const MEME_TOPICS = [
+  {
+    icon: Flame,
+    label: "Bust This Cap 🧢",
+    query: "Is the news about AI replacing coders next Tuesday real or absolute cap?",
+  },
+  {
+    icon: Zap,
+    label: "Spicy Tech Rumors 🌶️",
+    query: "Give me the raw no-cap breakdown of the latest Chinese chipmaker stocks surge.",
+  },
+  {
+    icon: Globe,
+    label: "Alien Telemetry 🛸",
+    query: "Did scientists actually intercept extraterrestrial signals or is it space debris?",
+  },
+  {
+    icon: Search,
+    label: "Hood Ground Truth 💯",
+    query: "Fact check this headline and tell me if it's a W or a massive L.",
+  },
+];
 
 export function HelpBot() {
   const [isOpen, setIsOpen] = useState(false);
@@ -81,8 +86,7 @@ export function HelpBot() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { user } = useSession();
-  const { data: memeMode = false } = useMemeMode(user?.id);
+  const { memeMode } = useMemeMode();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -96,13 +100,13 @@ export function HelpBot() {
 
   const { mutate: sendMessage, isPending } = useMutation({
     mutationFn: async (userMessage: string) => {
-      setSearchStep("🔍 Searching global news databases & wire reports...");
+      setSearchStep(memeMode ? "🧢 Checking cap levels across the matrix..." : "🔍 Searching global news databases & wire reports...");
       await new Promise((r) => setTimeout(r, 600));
 
-      setSearchStep("📰 Cross-referencing source credibility & verified datasets...");
+      setSearchStep(memeMode ? "🔥 Sniffing out fake news & spicy claims..." : "📰 Cross-referencing source credibility & verified datasets...");
       await new Promise((r) => setTimeout(r, 600));
 
-      setSearchStep("📊 Synthesizing Veritas Ground Truth score...");
+      setSearchStep(memeMode ? "💯 Calculating Chad Ground Truth Precision..." : "📊 Synthesizing Veritas Ground Truth score...");
       await new Promise((r) => setTimeout(r, 500));
 
       try {
@@ -176,28 +180,38 @@ export function HelpBot() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const activeTopics = memeMode ? MEME_TOPICS : STANDARD_TOPICS;
+
   return (
     <>
       {/* Floating Circular Trigger Button */}
       <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3">
         {!isOpen && (
-          <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1c2333]/90 border border-white/10 text-xs text-white/90 shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-right-3 duration-300">
+          <span className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-right-3 duration-300 ${
+            memeMode
+              ? "bg-amber-500/20 border-amber-400/60 text-amber-300 font-bold animate-pulse"
+              : "bg-[#1c2333]/90 border-white/10 text-white/90"
+          }`}>
             <Sparkles className="h-3.5 w-3.5 text-orange-400" />
-            <span>Ask Veritas AI</span>
+            <span>{memeMode ? "Ask Chad AI 🤖🔥" : "Ask Veritas AI"}</span>
           </span>
         )}
 
         <button
           onClick={() => setIsOpen(!isOpen)}
           aria-label="Toggle AI Help Bot"
-          className="group relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-amber-500 via-orange-500 to-rose-500 p-0.5 shadow-2xl shadow-orange-500/30 transition-all duration-300 hover:scale-110 active:scale-95"
+          className={`group relative flex h-14 w-14 items-center justify-center rounded-full p-0.5 shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95 ${
+            memeMode
+              ? "bg-gradient-to-tr from-amber-400 via-yellow-500 to-rose-500 shadow-amber-500/50 animate-bounce"
+              : "bg-gradient-to-tr from-amber-500 via-orange-500 to-rose-500 shadow-orange-500/30"
+          }`}
         >
           <div className="flex h-full w-full items-center justify-center rounded-full bg-[#141926] text-orange-400 group-hover:bg-[#1a2133] transition-colors relative">
             {isOpen ? (
               <X className="h-6 w-6 text-white" />
             ) : (
               <div className="relative flex items-center justify-center">
-                <Bot className="h-7 w-7 text-orange-400 group-hover:text-orange-300 transition-colors" />
+                <Bot className={`h-7 w-7 transition-colors ${memeMode ? "text-amber-400" : "text-orange-400"}`} />
                 <span className="absolute -top-1 -right-1 flex h-3 w-3">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span>
@@ -210,19 +224,29 @@ export function HelpBot() {
 
       {/* Expanded Chat Window Space */}
       {isOpen && (
-        <div className="fixed bottom-24 right-4 sm:right-6 z-50 flex h-[600px] max-h-[82vh] w-[92vw] sm:w-[420px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#131824]/95 text-white shadow-2xl backdrop-blur-2xl animate-in fade-in slide-in-from-bottom-6 duration-200">
+        <div className={`fixed bottom-24 right-4 sm:right-6 z-50 flex h-[600px] max-h-[82vh] w-[92vw] sm:w-[420px] flex-col overflow-hidden rounded-3xl border text-white shadow-2xl backdrop-blur-2xl animate-in fade-in slide-in-from-bottom-6 duration-200 ${
+          memeMode
+            ? "bg-[#131824]/95 border-amber-500/40 shadow-amber-500/20"
+            : "bg-[#131824]/95 border-white/10"
+        }`}>
           {/* Header */}
           <div className="flex items-center justify-between border-b border-white/10 bg-[#1a2133]/60 px-4 py-3.5">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-500 text-white font-bold shadow-md shadow-orange-500/20">
+              <div className={`flex h-9 w-9 items-center justify-center rounded-2xl text-white font-bold shadow-md ${
+                memeMode ? "bg-gradient-to-tr from-amber-400 to-rose-500 shadow-amber-500/30" : "bg-gradient-to-tr from-orange-500 to-amber-500 shadow-orange-500/20"
+              }`}>
                 <Bot className="h-5 w-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="font-serif text-base font-bold text-white">Veritas AI Help Bot</h3>
+                  <h3 className="font-serif text-base font-bold text-white">
+                    {memeMode ? "Veritas Chad AI 🤖🔥" : "Veritas AI Help Bot"}
+                  </h3>
                   <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
                 </div>
-                <p className="text-[0.7rem] text-slate-400">Live Global News Grounding</p>
+                <p className="text-[0.7rem] text-slate-400">
+                  {memeMode ? "100% No Cap Truth Engine" : "Live Global News Grounding"}
+                </p>
               </div>
             </div>
 
@@ -248,12 +272,12 @@ export function HelpBot() {
 
           {/* Meme Mode Banner if active */}
           {memeMode && (
-            <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1.5 text-[0.7rem] text-amber-300 flex items-center justify-between">
+            <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-1.5 text-[0.7rem] text-amber-300 flex items-center justify-between font-bold tracking-wide">
               <span className="flex items-center gap-1">
-                <Sparkles className="h-3 w-3" /> Meme Mode Active
+                <Sparkles className="h-3.5 w-3.5 text-amber-400 animate-spin" /> ✨ MEME MODE ACTIVE • NO CAP
               </span>
               <Link to="/settings" onClick={() => setIsOpen(false)} className="underline hover:text-white">
-                Settings
+                Disable
               </Link>
             </div>
           )}
@@ -262,34 +286,52 @@ export function HelpBot() {
           <div className="flex-1 space-y-4 overflow-y-auto p-4 text-xs scrollbar-thin">
             {messages.length === 0 && (
               <div className="space-y-4 py-3">
-                <div className="rounded-2xl border border-white/10 bg-[#1c2436]/60 p-4 text-center space-y-2">
-                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-400">
+                <div className={`rounded-2xl border p-4 text-center space-y-2 ${
+                  memeMode ? "border-amber-500/30 bg-amber-500/5 text-amber-200" : "border-white/10 bg-[#1c2436]/60 text-slate-300"
+                }`}>
+                  <div className={`mx-auto flex h-10 w-10 items-center justify-center rounded-2xl ${
+                    memeMode ? "bg-amber-500/20 text-amber-400" : "bg-orange-500/10 text-orange-400"
+                  }`}>
                     <Sparkles className="h-5 w-5" />
                   </div>
-                  <h4 className="font-serif text-sm font-semibold text-white">How can I help verify today?</h4>
-                  <p className="text-[0.75rem] text-slate-300 leading-relaxed">
-                    Ask me any question, paste a news link, or check global claims against verified wire sources in real-time.
+                  <h4 className="font-serif text-sm font-bold text-white">
+                    {memeMode ? "Sup Chief! Ready to bust some fake news cap? 🧢" : "How can I help verify today?"}
+                  </h4>
+                  <p className="text-[0.75rem] leading-relaxed">
+                    {memeMode
+                      ? "Ask me anything or paste a claim. I'll break down the ground truth with zero cap and maximum spice."
+                      : "Ask me any question, paste a news link, or check global claims against verified wire sources in real-time."}
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <span className="text-[0.68rem] font-semibold uppercase tracking-wider text-orange-400 flex items-center gap-1">
+                  <span className={`text-[0.68rem] font-bold uppercase tracking-wider flex items-center gap-1 ${
+                    memeMode ? "text-amber-400" : "text-orange-400"
+                  }`}>
                     <HelpCircle className="h-3.5 w-3.5" /> Preset Quick Queries
                   </span>
                   <div className="grid gap-2">
-                    {PRESET_TOPICS.map((topic, idx) => {
+                    {activeTopics.map((topic, idx) => {
                       const Icon = topic.icon;
                       return (
                         <button
                           key={idx}
                           onClick={() => handleSend(topic.query)}
-                          className="flex items-center gap-3 rounded-xl border border-white/5 bg-[#182030] p-2.5 text-left hover:border-orange-500/50 hover:bg-[#1f293d] transition-all group"
+                          className={`flex items-center gap-3 rounded-xl border p-2.5 text-left transition-all group ${
+                            memeMode
+                              ? "border-amber-500/20 bg-[#1e2333] hover:border-amber-400/60 hover:bg-[#252c40]"
+                              : "border-white/5 bg-[#182030] hover:border-orange-500/50 hover:bg-[#1f293d]"
+                          }`}
                         >
-                          <div className="rounded-lg bg-orange-500/10 p-1.5 text-orange-400 group-hover:scale-110 transition-transform">
+                          <div className={`rounded-lg p-1.5 group-hover:scale-110 transition-transform ${
+                            memeMode ? "bg-amber-500/20 text-amber-400" : "bg-orange-500/10 text-orange-400"
+                          }`}>
                             <Icon className="h-3.5 w-3.5" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-[0.75rem] font-semibold text-slate-200 group-hover:text-orange-400 transition-colors">
+                            <div className={`text-[0.75rem] font-semibold transition-colors ${
+                              memeMode ? "text-amber-200 group-hover:text-amber-400" : "text-slate-200 group-hover:text-orange-400"
+                            }`}>
                               {topic.label}
                             </div>
                             <div className="text-[0.68rem] text-slate-400 truncate">
@@ -310,14 +352,20 @@ export function HelpBot() {
                 className={`flex gap-2.5 ${m.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 {m.role === "assistant" && (
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-500 text-white font-bold text-[0.65rem] mt-0.5">
+                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white font-bold text-[0.65rem] mt-0.5 ${
+                    memeMode ? "bg-amber-500" : "bg-orange-500"
+                  }`}>
                     <Bot className="h-3.5 w-3.5" />
                   </div>
                 )}
 
                 <div className={`space-y-2 max-w-[88%] ${m.role === "user" ? "items-end" : "items-start"}`}>
                   {m.role === "user" ? (
-                    <div className="rounded-2xl bg-gradient-to-r from-orange-500 to-amber-600 text-white px-3.5 py-2.5 text-xs shadow-md">
+                    <div className={`rounded-2xl px-3.5 py-2.5 text-xs shadow-md ${
+                      memeMode
+                        ? "bg-gradient-to-r from-amber-500 to-yellow-600 text-black font-semibold"
+                        : "bg-gradient-to-r from-orange-500 to-amber-600 text-white"
+                    }`}>
                       {m.content}
                     </div>
                   ) : (
@@ -421,7 +469,9 @@ export function HelpBot() {
 
             {isPending && (
               <div className="flex gap-2.5 items-start animate-pulse">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-500 text-white font-bold text-[0.65rem] mt-0.5">
+                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white font-bold text-[0.65rem] mt-0.5 ${
+                  memeMode ? "bg-amber-500" : "bg-orange-500"
+                }`}>
                   <Bot className="h-3.5 w-3.5" />
                 </div>
                 <div className="rounded-2xl border border-orange-500/30 bg-[#1c2436] p-3 space-y-1.5 text-xs text-orange-300 max-w-[85%] shadow-md">
@@ -447,14 +497,16 @@ export function HelpBot() {
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask anything or check any headline..."
+              placeholder={memeMode ? "Type any claim to check for cap... 🧢" : "Ask anything or check any headline..."}
               className="flex-1 bg-[#101420] border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none placeholder:text-slate-500 focus:border-orange-500/60 transition-colors"
               disabled={isPending}
             />
             <button
               type="submit"
               disabled={!input.trim() || isPending}
-              className="rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50 hover:opacity-90 transition-opacity flex items-center gap-1 shadow-md shadow-orange-500/20"
+              className={`rounded-xl px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50 hover:opacity-90 transition-opacity flex items-center gap-1 shadow-md ${
+                memeMode ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-bold shadow-amber-500/30" : "bg-gradient-to-r from-orange-500 to-amber-500 shadow-orange-500/20"
+              }`}
             >
               <Send className="h-3.5 w-3.5" />
             </button>

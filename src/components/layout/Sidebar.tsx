@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Home, ShieldCheck, Eye, Settings, LayoutGrid, Flame, Compass, Menu, X } from "lucide-react";
+import { Home, ShieldCheck, Eye, Settings, LayoutGrid, Flame, Compass, Menu, X, CheckCircle2 } from "lucide-react";
+import { useUserProfile } from "@/lib/userProfileStore";
+import { ProfileDrawer } from "@/components/user/ProfileDrawer";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -28,7 +30,9 @@ export function Sidebar() {
   const searchParams = (routerState.location.search as { category?: string }) || {};
   const currentCategory = searchParams.category || "All";
 
+  const { profile } = useUserProfile();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   return (
     <>
@@ -51,16 +55,24 @@ export function Sidebar() {
           </div>
         </div>
 
-        <Link
-          to="/truth-analyzer"
-          className="text-xs font-semibold px-3 py-1.5 rounded-full bg-orange-500 text-white shadow-md shadow-orange-500/20 flex items-center gap-1"
-        >
-          <ShieldCheck className="h-3.5 w-3.5" />
-          <span>Analyze</span>
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setProfileOpen(true)}
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-orange-500/50 overflow-hidden shadow-md"
+          >
+            <img src={profile.avatarUrl} alt={profile.name} className="h-full w-full object-cover" />
+          </button>
+          <Link
+            to="/truth-analyzer"
+            className="text-xs font-semibold px-3 py-1.5 rounded-full bg-orange-500 text-white shadow-md shadow-orange-500/20 flex items-center gap-1"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            <span>Analyze</span>
+          </Link>
+        </div>
       </header>
 
-      {/* Mobile Menu Backdrop & Drawer */}
+      {/* Mobile Menu Drawer */}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div
@@ -89,7 +101,7 @@ export function Sidebar() {
                 </button>
               </div>
 
-              {/* Primary Navigation Items */}
+              {/* Navigation Links */}
               <div className="space-y-1">
                 <div className="px-2 pb-2 text-[0.65rem] font-semibold uppercase tracking-wider text-slate-400">
                   Navigation
@@ -115,7 +127,7 @@ export function Sidebar() {
                 })}
               </div>
 
-              {/* Categories Navigation List */}
+              {/* Categories */}
               <div className="pt-4 border-t border-white/10 space-y-2">
                 <div className="px-2 text-[0.65rem] font-semibold uppercase tracking-wider text-slate-400 flex items-center justify-between">
                   <span>Categories</span>
@@ -146,12 +158,23 @@ export function Sidebar() {
               </div>
             </div>
 
-            <div className="pt-4 border-t border-white/10 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-xs">
-                  V
+            {/* Mobile User Profile Section */}
+            <div
+              onClick={() => {
+                setMobileOpen(false);
+                setProfileOpen(true);
+              }}
+              className="pt-4 border-t border-white/10 flex items-center justify-between cursor-pointer hover:bg-white/5 p-2 rounded-xl transition-colors"
+            >
+              <div className="flex items-center gap-2.5">
+                <img src={profile.avatarUrl} alt={profile.name} className="h-8 w-8 rounded-full object-cover border border-orange-500/50" />
+                <div className="truncate">
+                  <div className="text-xs font-semibold text-white truncate flex items-center gap-1">
+                    {profile.name}
+                    <CheckCircle2 className="h-3 w-3 text-orange-400" />
+                  </div>
+                  <div className="text-[0.65rem] text-slate-400 truncate">{profile.handle}</div>
                 </div>
-                <div className="text-xs font-semibold text-white">Veritas User</div>
               </div>
               <Compass className="h-4 w-4 text-slate-400" />
             </div>
@@ -159,9 +182,10 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* Desktop Permanent Sidebar */}
-      <aside className="w-64 shrink-0 border-r border-white/10 bg-[#121622] px-4 py-6 hidden lg:flex lg:flex-col justify-between min-h-screen font-sans">
+      {/* Desktop Fixed Sidebar (Sticky h-screen) */}
+      <aside className="w-64 shrink-0 border-r border-white/10 bg-[#121622] px-4 py-6 hidden lg:flex lg:flex-col justify-between h-screen sticky top-0 z-30 font-sans overflow-y-auto">
         <div className="space-y-6">
+          {/* Logo Header */}
           <div className="flex items-center gap-3 px-2">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-500 text-white font-bold text-xl shadow-lg shadow-orange-500/20">
               <LayoutGrid className="h-5 w-5 text-white" />
@@ -174,6 +198,7 @@ export function Sidebar() {
             </div>
           </div>
 
+          {/* Navigation Items */}
           <div className="space-y-1">
             <div className="px-3 pb-2 text-[0.68rem] font-semibold uppercase tracking-wider text-slate-400">
               Navigation
@@ -201,6 +226,7 @@ export function Sidebar() {
             })}
           </div>
 
+          {/* Categories List */}
           <div className="pt-4 border-t border-white/10 space-y-2">
             <div className="flex items-center justify-between px-3 text-[0.68rem] font-semibold uppercase tracking-wider text-slate-400">
               <span>Categories</span>
@@ -231,19 +257,34 @@ export function Sidebar() {
           </div>
         </div>
 
-        <div className="pt-4 border-t border-white/10 flex items-center justify-between px-2">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-xs shadow-md">
-              V
+        {/* Permanent Bottom User Profile Card (Fixed in view) */}
+        <div
+          onClick={() => setProfileOpen(true)}
+          className="pt-4 border-t border-white/10 flex items-center justify-between px-2.5 py-2 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group mt-4"
+        >
+          <div className="flex items-center gap-2.5 truncate">
+            <div className="relative">
+              <img
+                src={profile.avatarUrl}
+                alt={profile.name}
+                className="h-9 w-9 rounded-full object-cover border-2 border-orange-500/60 shadow-md group-hover:scale-105 transition-transform"
+              />
+              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 border-2 border-[#121622]" />
             </div>
-            <div>
-              <div className="text-xs font-semibold text-white">Veritas User</div>
-              <div className="text-[0.65rem] text-slate-400">Verified Analyst</div>
+            <div className="truncate">
+              <div className="text-xs font-bold text-white group-hover:text-orange-400 transition-colors truncate flex items-center gap-1">
+                {profile.name}
+                <CheckCircle2 className="h-3 w-3 text-orange-400 shrink-0" />
+              </div>
+              <div className="text-[0.65rem] text-slate-400 truncate">{profile.handle}</div>
             </div>
           </div>
-          <Compass className="h-4 w-4 text-slate-500" />
+          <Compass className="h-4 w-4 text-slate-500 group-hover:text-orange-400 transition-colors shrink-0" />
         </div>
       </aside>
+
+      {/* Account Profile Drawer Modal */}
+      <ProfileDrawer isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
     </>
   );
 }

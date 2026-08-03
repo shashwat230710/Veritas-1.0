@@ -1,11 +1,14 @@
 import { createFileRoute, Link, useSearch, useNavigate } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { Search, LayoutGrid, Flame, ShieldCheck, Filter } from "lucide-react";
+import { Search, LayoutGrid, Flame, ShieldCheck, Filter, Sparkles } from "lucide-react";
 import { FeedCard } from "@/components/feed/FeedCard";
 import { ArticleDetailModal } from "@/components/feed/ArticleDetailModal";
 import { CATEGORIES } from "@/components/layout/Sidebar";
 import { useFeed, normalizeCategory, type FeedTab } from "@/lib/queries/useFeed";
 import { useSession } from "@/lib/useSession";
+import { useUserProfile } from "@/lib/userProfileStore";
+import { useMemeMode } from "@/lib/useMemeMode";
+import { ProfileDrawer } from "@/components/user/ProfileDrawer";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -23,10 +26,15 @@ function FeedPage() {
   const [tab, setTab] = useState<FeedTab>("for-you");
   const [searchQuery, setSearchQuery] = useState("");
   const { user } = useSession();
+  const { profile } = useUserProfile();
+  const { memeMode, setMemeMode } = useMemeMode();
   const { data: items, isLoading, error } = useFeed(tab, user?.id);
 
   // Active story index for Next/Prev story scroll & modal navigation
   const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
+
+  // Account Profile Drawer modal toggle
+  const [profileOpen, setProfileOpen] = useState(false);
 
   // Filter items by search query AND sidebar category cleanly
   const filteredItems = useMemo(() => {
@@ -71,16 +79,34 @@ function FeedPage() {
 
   return (
     <div className="max-w-6xl space-y-6 sm:space-y-8 font-sans pb-16">
+      {/* Meme Mode Top Ticker (if active) */}
+      {memeMode && (
+        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-300 flex items-center justify-between shadow-lg shadow-amber-500/10 animate-pulse">
+          <div className="flex items-center gap-2 font-bold tracking-wide">
+            <Sparkles className="h-4 w-4 text-amber-400 animate-spin" />
+            <span>🔥 MEME MODE ACTIVE: 100% NO CAP • FAKE NEWS BUSTED WITH SPICE 🍿</span>
+          </div>
+          <button
+            onClick={() => setMemeMode(false)}
+            className="text-[0.68rem] bg-amber-500/20 hover:bg-amber-500/40 text-amber-200 border border-amber-500/40 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer"
+          >
+            Turn Off
+          </button>
+        </div>
+      )}
+
       {/* Top Header Bar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-2xl bg-orange-500/15 border border-orange-500/30 text-orange-400">
+          <div className={`flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-2xl border ${
+            memeMode ? "bg-amber-500/20 border-amber-500/40 text-amber-400 shadow-md shadow-amber-500/20" : "bg-orange-500/15 border-orange-500/30 text-orange-400"
+          }`}>
             <LayoutGrid className="h-5 w-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-white font-sans">
-                Explore
+                {memeMode ? "Explore feed 🌶️" : "Explore"}
               </h1>
               {selectedCategory !== "All" && (
                 <span className="px-2.5 py-0.5 rounded-full bg-orange-500 text-white text-[0.68rem] font-bold uppercase shadow-md">
@@ -88,11 +114,13 @@ function FeedPage() {
                 </span>
               )}
             </div>
-            <p className="text-[0.75rem] sm:text-xs text-slate-400">Signal over noise • Verified Ground Truth</p>
+            <p className="text-[0.75rem] sm:text-xs text-slate-400">
+              {memeMode ? "No Cap Signal • Certified Hood Ground Truth 🗿" : "Signal over noise • Verified Ground Truth"}
+            </p>
           </div>
         </div>
 
-        {/* Top Search Bar & Profile Avatar */}
+        {/* Top Search Bar, Meme Toggle Badge & Interactive Profile Avatar */}
         <div className="flex items-center gap-3">
           <div className="relative flex-1 sm:w-72">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -100,14 +128,31 @@ function FeedPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search news, claims, topics..."
+              placeholder={memeMode ? "Search claims for cap... 🧢" : "Search news, claims, topics..."}
               className="w-full rounded-2xl border border-white/10 bg-[#161c2b] py-2 sm:py-2.5 pl-10 pr-4 text-xs text-white placeholder-slate-400 outline-none focus:border-orange-500/60 transition-colors shadow-inner"
             />
           </div>
 
-          <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 text-white font-bold text-xs shadow-md border-2 border-[#161c2b]">
-            V
-          </div>
+          <button
+            onClick={() => setMemeMode(!memeMode)}
+            title="Toggle Assistant Meme Mode"
+            className={`hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer border ${
+              memeMode
+                ? "bg-amber-500 text-black border-amber-400 shadow-md shadow-amber-500/30 scale-105"
+                : "bg-[#161c2b] text-slate-400 border-white/10 hover:text-white hover:bg-white/5"
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span>{memeMode ? "✨ MEME ON" : "✨ Meme Mode"}</span>
+          </button>
+
+          <button
+            onClick={() => setProfileOpen(true)}
+            aria-label="Open User Account Profile"
+            className="relative flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full overflow-hidden border-2 border-orange-500/60 shadow-md hover:scale-105 transition-transform cursor-pointer group"
+          >
+            <img src={profile.avatarUrl} alt={profile.name} className="h-full w-full object-cover" />
+          </button>
         </div>
       </div>
 
@@ -117,7 +162,7 @@ function FeedPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2 font-sans">
               <Flame className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500" />
-              Trending {selectedCategory !== "All" ? `in ${selectedCategory}` : ""}
+              {memeMode ? "🔥 Viral & Trending" : "Trending"} {selectedCategory !== "All" ? `in ${selectedCategory}` : ""}
             </h2>
             <button
               onClick={() => handleCategorySelect("All")}
@@ -147,7 +192,7 @@ function FeedPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2 font-sans">
               <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-orange-400" />
-              Today's read
+              {memeMode ? "Today's spicy ground truth 🍿" : "Today's read"}
             </h2>
             <Link
               to="/truth-analyzer"
@@ -252,6 +297,9 @@ function FeedPage() {
           }}
         />
       )}
+
+      {/* Account Profile Drawer Modal */}
+      <ProfileDrawer isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
     </div>
   );
 }
