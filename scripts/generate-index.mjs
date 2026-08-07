@@ -19,6 +19,9 @@ if (!mainJs) {
   process.exit(1);
 }
 
+// This HTML structure MUST match what __root.tsx renders so that
+// React's hydrateRoot(document, ...) can match and hydrate it.
+// __root.tsx renders: <html lang="en" className="dark"><head>...</head><body>...</body></html>
 const html = `<!DOCTYPE html>
 <html lang="en" class="dark">
   <head>
@@ -27,12 +30,9 @@ const html = `<!DOCTYPE html>
     <title>Veritas — Truth Platform</title>
     <meta name="description" content="Signal over noise, verified over viral." />
     ${mainCss ? `<link rel="stylesheet" href="/assets/${mainCss}" />` : ""}
-    <link rel="modulepreload" href="/assets/${mainJs}" />
-  </head>
-  <body>
-    <div id="root"></div>
     <script type="module" src="/assets/${mainJs}"></script>
-  </body>
+  </head>
+  <body></body>
 </html>`;
 
 writeFileSync(resolve(clientDir, "index.html"), html);
