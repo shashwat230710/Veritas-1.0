@@ -1,305 +1,287 @@
-import { createFileRoute, Link, useSearch, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { Search, LayoutGrid, Flame, ShieldCheck, Filter, Sparkles } from "lucide-react";
-import { FeedCard } from "@/components/feed/FeedCard";
-import { ArticleDetailModal } from "@/components/feed/ArticleDetailModal";
-import { CATEGORIES } from "@/components/layout/Sidebar";
-import { useFeed, normalizeCategory, type FeedTab } from "@/lib/queries/useFeed";
-import { useSession } from "@/lib/useSession";
-import { useUserProfile } from "@/lib/userProfileStore";
-import { useMemeMode } from "@/lib/useMemeMode";
-import { ProfileDrawer } from "@/components/user/ProfileDrawer";
+import { Navbar } from "@/components/matrix/Navbar";
+import { BreakingTicker } from "@/components/matrix/BreakingTicker";
+import { HeroSection } from "@/components/matrix/HeroSection";
+import { TruthScoreBadge } from "@/components/matrix/TruthScoreBadge";
+import { ImageCompareSlider } from "@/components/matrix/ImageCompareSlider";
+import { EvidenceGallery } from "@/components/matrix/EvidenceGallery";
+import { EventTimeline } from "@/components/matrix/EventTimeline";
+import { AIChatDrawer } from "@/components/matrix/AIChatDrawer";
+import { VideoShowcase } from "@/components/matrix/VideoShowcase";
+import { MOCK_CLAIMS, VerificationClaim, EvidenceImage } from "@/components/matrix/mockData";
+import { Sparkles, Send, Sliders, Activity, Clock, FileText, Layers, CheckCircle2, Shield } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    category: typeof search.category === "string" ? search.category : undefined,
-  }),
-  component: FeedPage,
+  component: TruthMatrixApp,
 });
 
-function FeedPage() {
-  const searchParams = useSearch({ from: "/" }) as { category?: string };
-  const navigate = useNavigate({ from: "/" });
-  const selectedCategory = searchParams?.category || "All";
+function TruthMatrixApp() {
+  const [activeCategory, setActiveCategory] = useState("HOME");
+  const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null);
+  const [activeMainTab, setActiveMainTab] = useState<"article" | "compare" | "timeline" | "stream">("compare");
+  const [chatOpen, setChatOpen] = useState(false);
 
-  const [tab, setTab] = useState<FeedTab>("for-you");
-  const [searchQuery, setSearchQuery] = useState("");
-  const { user } = useSession();
-  const { profile } = useUserProfile();
-  const { memeMode, setMemeMode } = useMemeMode();
-  const { data: items, isLoading, error } = useFeed(tab, user?.id);
+  // Custom claim text input for automated entity extraction & image matching simulation
+  const [customArticleText, setCustomArticleText] = useState("");
+  const [isProcessingInput, setIsProcessingInput] = useState(false);
 
-  // Active story index for Next/Prev story scroll & modal navigation
-  const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
-
-  // Account Profile Drawer modal toggle
-  const [profileOpen, setProfileOpen] = useState(false);
-
-  // Filter items by search query AND sidebar category cleanly
-  const filteredItems = useMemo(() => {
-    if (!items) return [];
-    let list = items;
-
-    // Filter by Category if selected
-    if (selectedCategory && selectedCategory !== "All") {
-      const catLower = selectedCategory.toLowerCase();
-      list = list.filter((item) => {
-        const normalized = normalizeCategory(item.category, item.title).toLowerCase();
-        const rawCat = (item.category || "").toLowerCase();
-        return normalized === catLower || rawCat.includes(catLower);
-      });
+  // Filter claims dynamically by selected category
+  const filteredClaims = useMemo(() => {
+    if (activeCategory === "HOME" || activeCategory === "ALL" || !activeCategory) {
+      return MOCK_CLAIMS;
     }
+    const catUpper = activeCategory.toUpperCase();
+    const matches = MOCK_CLAIMS.filter((c) => c.category === catUpper || (catUpper === "TECHNOLOGY" && c.category === "TECH"));
+    return matches.length > 0 ? matches : MOCK_CLAIMS;
+  }, [activeCategory]);
 
-    // Filter by Search Query if typed
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(
-        (item) =>
-          item.title.toLowerCase().includes(q) ||
-          (item.summary && item.summary.toLowerCase().includes(q)) ||
-          (item.category && item.category.toLowerCase().includes(q)),
-      );
+  // Active claim selection
+  const activeClaim: VerificationClaim = useMemo(() => {
+    if (selectedClaimId) {
+      const found = MOCK_CLAIMS.find((c) => c.id === selectedClaimId);
+      if (found) return found;
     }
+    return filteredClaims[0] || MOCK_CLAIMS[0];
+  }, [selectedClaimId, filteredClaims]);
 
-    return list;
-  }, [items, selectedCategory, searchQuery]);
+  // Smooth scroll target handler
+  const scrollToCompare = () => {
+    setActiveMainTab("compare");
+    const el = document.getElementById("compare-section");
+    if (el) el.scrollIntoView({ behavior: "smooth" });
+  };
 
-  // Featured Trending Section uses top 2 stories from filtered view
-  const trendingItems = useMemo(() => {
-    if (!filteredItems || filteredItems.length === 0) return [];
-    return filteredItems.slice(0, 2);
-  }, [filteredItems]);
+  const handleSelectCompareFromGallery = (ev: EvidenceImage) => {
+    scrollToCompare();
+  };
 
-  const activeArticle = activeStoryIndex !== null ? filteredItems[activeStoryIndex] : null;
+  // Simulate text processing & entity extraction on submit
+  const handleAnalyzeText = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customArticleText.trim()) return;
 
-  const handleCategorySelect = (cat: string) => {
-    navigate({ search: { category: cat } });
+    setIsProcessingInput(true);
+    setTimeout(() => {
+      setIsProcessingInput(false);
+      setChatOpen(true);
+    }, 1000);
   };
 
   return (
-    <div className="max-w-6xl space-y-6 sm:space-y-8 font-sans pb-16">
-      {/* Meme Mode Top Ticker (if active) */}
-      {memeMode && (
-        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-300 flex items-center justify-between shadow-lg shadow-amber-500/10 animate-pulse">
-          <div className="flex items-center gap-2 font-bold tracking-wide">
-            <Sparkles className="h-4 w-4 text-amber-400 animate-spin" />
-            <span>🔥 MEME MODE ACTIVE: 100% NO CAP • FAKE NEWS BUSTED WITH SPICE 🍿</span>
-          </div>
-          <button
-            onClick={() => setMemeMode(false)}
-            className="text-[0.68rem] bg-amber-500/20 hover:bg-amber-500/40 text-amber-200 border border-amber-500/40 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer"
-          >
-            Turn Off
-          </button>
-        </div>
-      )}
+    <div className="min-h-screen bg-[#050505] text-slate-100 font-sans selection:bg-orange-500 selection:text-white pb-24">
+      {/* 1. EDITORIAL NAVBAR (Exact Daily News Reference Image Match) */}
+      <Navbar
+        activeCategory={activeCategory}
+        onSelectCategory={(cat) => {
+          setActiveCategory(cat);
+          setSelectedClaimId(null);
+        }}
+        onOpenSearch={() => setChatOpen(true)}
+        onOpenChatDrawer={() => setChatOpen(true)}
+      />
 
-      {/* Top Header Bar */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className={`flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-2xl border ${
-            memeMode ? "bg-amber-500/20 border-amber-500/40 text-amber-400 shadow-md shadow-amber-500/20" : "bg-orange-500/15 border-orange-500/30 text-orange-400"
-          }`}>
-            <LayoutGrid className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-white font-sans">
-                {memeMode ? "Explore feed 🌶️" : "Explore"}
-              </h1>
-              {selectedCategory !== "All" && (
-                <span className="px-2.5 py-0.5 rounded-full bg-orange-500 text-white text-[0.68rem] font-bold uppercase shadow-md">
-                  {selectedCategory}
-                </span>
-              )}
-            </div>
-            <p className="text-[0.75rem] sm:text-xs text-slate-400">
-              {memeMode ? "No Cap Signal • Certified Hood Ground Truth 🗿" : "Signal over noise • Verified Ground Truth"}
-            </p>
-          </div>
-        </div>
+      {/* 2. REAL-TIME BREAKING TICKER MARQUEE */}
+      <BreakingTicker />
 
-        {/* Top Search Bar, Meme Toggle Badge & Interactive Profile Avatar */}
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1 sm:w-72">
-            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={memeMode ? "Search claims for cap... 🧢" : "Search news, claims, topics..."}
-              className="w-full rounded-2xl border border-white/10 bg-[#161c2b] py-2 sm:py-2.5 pl-10 pr-4 text-xs text-white placeholder-slate-400 outline-none focus:border-orange-500/60 transition-colors shadow-inner"
-            />
+      {/* 3. HERO FEATURED STORY & BREAKING NEWS SIDEBAR */}
+      <HeroSection
+        activeClaim={activeClaim}
+        allClaims={filteredClaims}
+        onSelectClaim={(claim) => setSelectedClaimId(claim.id)}
+        onOpenCompare={scrollToCompare}
+        onOpenChat={() => setChatOpen(true)}
+      />
+
+      {/* MAIN CONTENT AREA */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-10">
+        {/* 4. REAL-TIME TEXT PROCESSING & AUTOMATED ENTITY EXTRACTION BAR */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="bg-gradient-to-r from-[#0a0e17] via-[#0d1424] to-[#0a0e17] border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4"
+        >
+          <div className="flex items-center gap-2 text-xs font-mono font-bold text-orange-400 uppercase tracking-wider">
+            <Sparkles className="h-4 w-4" />
+            <span>REAL-TIME MULTI-SOURCE EVALUATION & ENTITY EXTRACTION ENGINE</span>
           </div>
 
-          <button
-            onClick={() => setMemeMode(!memeMode)}
-            title="Toggle Assistant Meme Mode"
-            className={`hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer border ${
-              memeMode
-                ? "bg-amber-500 text-black border-amber-400 shadow-md shadow-amber-500/30 scale-105"
-                : "bg-[#161c2b] text-slate-400 border-white/10 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>{memeMode ? "✨ MEME ON" : "✨ Meme Mode"}</span>
-          </button>
-
-          <button
-            onClick={() => setProfileOpen(true)}
-            aria-label="Open User Account Profile"
-            className="relative flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full overflow-hidden border-2 border-orange-500/60 shadow-md hover:scale-105 transition-transform cursor-pointer group"
-          >
-            <img src={profile.avatarUrl} alt={profile.name} className="h-full w-full object-cover" />
-          </button>
-        </div>
-      </div>
-
-      {/* Featured Trending Section (rendered if items exist) */}
-      {trendingItems.length > 0 && (
-        <section className="space-y-3 sm:space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2 font-sans">
-              <Flame className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500" />
-              {memeMode ? "🔥 Viral & Trending" : "Trending"} {selectedCategory !== "All" ? `in ${selectedCategory}` : ""}
-            </h2>
-            <button
-              onClick={() => handleCategorySelect("All")}
-              className="text-xs font-semibold text-orange-400 hover:text-orange-300 transition-colors hover:underline cursor-pointer"
-            >
-              View All
-            </button>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            {trendingItems.map((item, idx) => (
-              <FeedCard
-                key={"trending-" + item.id}
-                item={item}
-                userId={user?.id}
-                variant="trending"
-                onOpenDetail={() => setActiveStoryIndex(idx)}
+          <form onSubmit={handleAnalyzeText} className="flex flex-col md:flex-row gap-3">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={customArticleText}
+                onChange={(e) => setCustomArticleText(e.target.value)}
+                placeholder="Paste news claim, article text, or satellite image URL to evaluate across Reuters, AP & Maxar..."
+                className="w-full bg-[#060911] border border-slate-700/80 rounded-2xl px-5 py-3.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 font-mono shadow-inner"
               />
+            </div>
+            <button
+              type="submit"
+              disabled={isProcessingInput}
+              className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white font-bold text-xs px-6 py-3.5 rounded-2xl transition-all shadow-lg shadow-orange-500/25 flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
+            >
+              {isProcessingInput ? (
+                <>
+                  <Sparkles className="h-4 w-4 animate-spin" />
+                  <span>Evaluating News Sources...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  <span>Evaluate Across Wire Sources</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Quick Queries */}
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 pt-1">
+            <span className="font-mono text-[0.68rem] text-slate-500">Suggested Evaluations:</span>
+            {activeClaim.aiPromptMatches.map((prompt, idx) => (
+              <button
+                key={idx}
+                onClick={() => {
+                  setCustomArticleText(prompt);
+                  setChatOpen(true);
+                }}
+                className="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-[0.68rem] font-mono px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+              >
+                "{prompt}"
+              </button>
             ))}
           </div>
-        </section>
-      )}
+        </motion.section>
 
-      {/* Main Feed Section: Today's Read */}
-      <section className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-white/10 pb-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2 font-sans">
-              <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-orange-400" />
-              {memeMode ? "Today's spicy ground truth 🍿" : "Today's read"}
-            </h2>
-            <Link
-              to="/truth-analyzer"
-              className="sm:hidden text-xs font-semibold text-orange-400 hover:underline"
-            >
-              Analyze Claim →
-            </Link>
-          </div>
+        {/* 5. INTERACTIVE FEATURE TABS SWITCHER */}
+        <div className="flex items-center gap-2 border-b border-slate-800 pb-3 overflow-x-auto no-scrollbar">
+          {[
+            { id: "compare", label: "Evidence Gallery & Compare Tool", icon: Sliders },
+            { id: "stream", label: "Live Video Stream Forensics", icon: Activity },
+            { id: "timeline", label: "Event Progression Timeline", icon: Clock },
+            { id: "article", label: "Full Theoretical Masterclass", icon: FileText },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeMainTab === tab.id;
 
-          {/* Unified Category Pills Bar */}
-          <div className="flex gap-2 text-xs overflow-x-auto pb-1 scrollbar-none">
-            {CATEGORIES.map((cat) => {
-              const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
-              return (
-                <button
-                  key={cat}
-                  onClick={() => handleCategorySelect(cat)}
-                  className={cn(
-                    "rounded-xl px-3 sm:px-3.5 py-1.5 font-medium transition-all duration-200 whitespace-nowrap cursor-pointer",
-                    isSelected
-                      ? "bg-orange-500 text-white shadow-md shadow-orange-500/20 font-semibold"
-                      : "bg-[#161c2b] text-slate-400 border border-white/5 hover:text-white hover:bg-white/5",
-                  )}
-                >
-                  {cat}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Active Category Filter Status pill */}
-        {selectedCategory !== "All" && (
-          <div className="flex items-center justify-between bg-orange-500/10 border border-orange-500/30 rounded-xl px-3.5 py-2 text-xs text-orange-400">
-            <span className="flex items-center gap-1.5 font-medium">
-              <Filter className="h-3.5 w-3.5" /> Filtered by category: <strong>{selectedCategory}</strong> ({filteredItems.length} {filteredItems.length === 1 ? "story" : "stories"})
-            </span>
-            <button
-              onClick={() => handleCategorySelect("All")}
-              className="underline font-semibold hover:text-white cursor-pointer"
-            >
-              Clear Filter
-            </button>
-          </div>
-        )}
-
-        {/* Grid List of Feed Items */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          {isLoading && (
-            <div className="col-span-2 py-8 text-center text-xs text-slate-400 animate-pulse">
-              Loading verified ground truth stories…
-            </div>
-          )}
-
-          {error && (
-            <div className="col-span-2 rounded-2xl border border-red-500/30 bg-red-950/20 p-4 text-xs text-red-400">
-              Couldn't load feed: {error.message || "unknown error"}
-            </div>
-          )}
-
-          {filteredItems.length === 0 && !isLoading && !error && (
-            <div className="col-span-2 py-8 text-center text-xs text-slate-400 space-y-2">
-              <p>No news items match "{selectedCategory !== "All" ? selectedCategory : searchQuery}".</p>
+            return (
               <button
-                onClick={() => handleCategorySelect("All")}
-                className="inline-block text-orange-400 font-semibold underline cursor-pointer"
+                key={tab.id}
+                onClick={() => setActiveMainTab(tab.id as any)}
+                className={cn(
+                  "flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-mono font-bold transition-all whitespace-nowrap cursor-pointer",
+                  isActive
+                    ? "bg-orange-500 text-white shadow-lg shadow-orange-500/25 scale-105"
+                    : "bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800"
+                )}
               >
-                Clear Category Filter
+                <Icon className="h-4 w-4" />
+                <span>{tab.label}</span>
               </button>
-            </div>
+            );
+          })}
+        </div>
+
+        {/* 6. TAB CONTENT PANELS WITH SMOOTH FADE ANIMATION */}
+        <AnimatePresence mode="wait">
+          {activeMainTab === "compare" && (
+            <motion.div
+              key={`tab-compare-${activeClaim.id}`}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-10"
+            >
+              {/* TRUTH CONFIDENCE GAUGE */}
+              <TruthScoreBadge
+                score={activeClaim.truthScore}
+                status={activeClaim.status}
+                biasRating={activeClaim.biasRating}
+                spectralScore={activeClaim.spectralConsistency}
+                exifScore={activeClaim.exifIntegrity}
+                variant="full"
+              />
+
+              {/* SIDE-BY-SIDE DRAG COMPARISON SLIDER */}
+              <div id="compare-section">
+                <ImageCompareSlider
+                  originalImage={activeClaim.comparedOriginalImage}
+                  verifiedImage={activeClaim.comparedVerifiedImage}
+                  originalTitle={`${activeClaim.title} (Suspected Edit)`}
+                  verifiedTitle="Reuters Wire / Maxar Orbital Satellite Pass"
+                  aiNotes={[
+                    "Cross-matching multi-spectral satellite imagery against global news wires",
+                    "Telemetry analysis verifies sensor timestamp and solar elevation angles",
+                    activeClaim.aiAnalysisSummary
+                  ]}
+                />
+              </div>
+
+              {/* EVIDENCE GALLERY GRID */}
+              <EvidenceGallery
+                evidenceList={activeClaim.evidenceList}
+                onSelectCompare={handleSelectCompareFromGallery}
+              />
+            </motion.div>
           )}
 
-          {filteredItems.map((item, idx) => (
-            <FeedCard
-              key={item.id}
-              item={item}
-              userId={user?.id}
-              variant="standard"
-              onOpenDetail={() => setActiveStoryIndex(idx)}
-            />
-          ))}
-        </div>
-      </section>
+          {activeMainTab === "stream" && (
+            <motion.div
+              key="tab-stream"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.3 }}
+            >
+              <VideoShowcase />
+            </motion.div>
+          )}
 
-      {/* Global Story Detail Modal with Next / Prev Story Navigation */}
-      {activeArticle && activeStoryIndex !== null && (
-        <ArticleDetailModal
-          item={activeArticle}
-          userId={user?.id}
-          onClose={() => setActiveStoryIndex(null)}
-          hasNext={activeStoryIndex < filteredItems.length - 1}
-          hasPrev={activeStoryIndex > 0}
-          onNextStory={() => {
-            if (activeStoryIndex < filteredItems.length - 1) {
-              setActiveStoryIndex(activeStoryIndex + 1);
-            }
-          }}
-          onPrevStory={() => {
-            if (activeStoryIndex > 0) {
-              setActiveStoryIndex(activeStoryIndex - 1);
-            }
-          }}
-        />
-      )}
+          {activeMainTab === "timeline" && (
+            <motion.div
+              key={`tab-timeline-${activeClaim.id}`}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.3 }}
+            >
+              <EventTimeline timeline={activeClaim.timeline} />
+            </motion.div>
+          )}
 
-      {/* Account Profile Drawer Modal */}
-      <ProfileDrawer isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
+          {activeMainTab === "article" && (
+            <motion.div
+              key={`tab-article-${activeClaim.id}`}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.3 }}
+              className="bg-[#070b12] border border-slate-800 rounded-3xl p-8 space-y-6 shadow-2xl text-slate-300 leading-relaxed font-sans"
+            >
+              <h2 className="font-serif text-3xl font-bold text-white">
+                {activeClaim.headlineSerif}
+              </h2>
+              <p className="text-base text-slate-200">
+                {activeClaim.summary}
+              </p>
+              <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl font-mono text-xs text-orange-400">
+                AI Forensics Summary: {activeClaim.aiAnalysisSummary}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
+
+      {/* 7. DOCKED / FLOATING TRUTH AI ASSISTANT DRAWER */}
+      <AIChatDrawer
+        isOpen={chatOpen}
+        onClose={() => setChatOpen(false)}
+      />
     </div>
   );
 }
